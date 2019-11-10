@@ -1,5 +1,4 @@
-#![allow(dead_code, unused_imports)]
-#![deny(missing_debug_implementations)]
+#![deny(missing_debug_implementations, unsafe_code)]
 
 extern crate bitreader;
 extern crate flate2;
@@ -15,13 +14,13 @@ use flate2::read::DeflateDecoder;
 
 // TODO // u32::from_le_bytes(buffer).to_be_bytes()
 
-const FILE_PATH: &str = "test.zip";
 /// ZIP file magic bytes
 const LOCAL_FILE_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x03, 0x04];
 const DATA_DESCRIPTOR_SIGNATURE: [u8; 4] = [0x08, 0x07, 0x4b, 0x50];
 const CENTRAL_DIRECTORY_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x01, 0x02];
 const END_CENTRAL_DIRECTORY_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
 
+/// Read `n` bytes as [u8; n]
 macro_rules! read_bytes_to_buffer {
     ($reader:expr, $bytes:literal) => {
         if let Some(mut buffer) = Some([0u8; $bytes]) {
@@ -33,6 +32,7 @@ macro_rules! read_bytes_to_buffer {
     };
 }
 
+/// Read 1 byte as a u8
 macro_rules! read_u8 {
     ($reader:expr) => {
         if let Some(mut buffer) = Some([0u8]) {
@@ -44,6 +44,7 @@ macro_rules! read_u8 {
     };
 }
 
+/// Read 2 bytes as a u16
 macro_rules! read_u16 {
     ($reader:expr) => {
         if let Some(mut buffer) = Some([0u8; 2]) {
@@ -55,6 +56,7 @@ macro_rules! read_u16 {
     };
 }
 
+/// Read 4 bytes as a u32
 macro_rules! read_u32 {
     ($reader:expr) => {
         if let Some(mut buffer) = Some([0u8; 4]) {
@@ -199,7 +201,8 @@ impl fmt::Display for DateTimeModified {
 }
 
 impl DateTimeModified {
-    pub fn from_bytes(b: [u8; 4]) -> DateTimeModified {
+    pub fn from_bytes(mut b: [u8; 4]) -> DateTimeModified {
+        b = u32::from_le_bytes(b).to_be_bytes();
         let mut bit_reader = BitReader::new(&b);
         let second = 2 * bit_reader.read_u8(5).unwrap();
         let minute = bit_reader.read_u8(6).unwrap();
@@ -280,17 +283,22 @@ impl Default for CompressionMethod {
 
 #[derive(Debug, Default)]
 pub struct ZippedFileMetadata {
+    /// PKZip version needed to unzip file
     pub version_needed: u16,
     pub compression_method: CompressionMethod,
     pub date_time_modified: DateTimeModified,
+    /// Bit flags related to encoding
     pub flags: ZipFlags,
+    /// File name
     pub name: String,
     pub compressed_size: u64,
     pub uncompressed_size: u64,
     pub crc: [u8; 4],
+    /// Key value pairs of extra information
     pub extra_fields: Vec<u8>,
 }
 
+/// General purpose bit flags related to encoding
 #[derive(Debug, Copy, Clone, Default)]
 pub struct ZipFlags {
     is_encrypted: bool,
@@ -389,6 +397,7 @@ pub struct ZippedFile {
 }
 
 impl ZippedFile {
+    /// Decompress bytes if necessary and return bytes
     pub fn data(self) -> Vec<u8> {
         match self.metadata.compression_method {
             CompressionMethod::None => self.data,
@@ -403,6 +412,7 @@ impl ZippedFile {
     }
 }
 
+/// An entire ZIP archive
 #[derive(Debug)]
 pub struct ZippedArchive<R: Read + BufRead> {
     files: Vec<ZippedFile>,
@@ -412,7 +422,8 @@ pub struct ZippedArchive<R: Read + BufRead> {
 }
 
 impl<R: Read + BufRead> ZippedArchive<R> {
-    pub fn from_buffer(r: R) -> Result<ZippedArchive<R>, io::Error> {
+    /// Construct ZippedArchive from and R such that R: Read + Bufread
+    pub fn from_bufreader(r: R) -> Result<ZippedArchive<R>, io::Error> {
         ZippedArchive {
             files: Vec::new(),
             central_directory: Default::default(),
@@ -443,7 +454,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         Ok(self)
     }
 
-    pub fn read_metadata(&mut self) -> Result<ZippedFileMetadata, io::Error> {
+    fn read_metadata(&mut self) -> Result<ZippedFileMetadata, io::Error> {
         let version_needed = read_u16!(self.reader);
         let bit_flags = ZipFlags::from_bytes(read_bytes_to_buffer!(self.reader, 2));
         let compression_method = CompressionMethod::from_u16(read_u16!(self.reader));
@@ -476,7 +487,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         })
     }
 
-    pub fn read_file(&mut self) -> Result<(), io::Error> {
+    fn read_file(&mut self) -> Result<(), io::Error> {
         let mut metadata = self.read_metadata()?;
 
         if metadata.flags.has_data_descriptor {
@@ -502,7 +513,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         Ok(())
     }
 
-    pub fn read_central_directory(&mut self) -> Result<(), io::Error> {
+    fn read_central_directory(&mut self) -> Result<(), io::Error> {
         let os = OS::from_u8(read_u8!(self.reader));
         let zip_specification_version = read_u8!(self.reader);
         let version_needed = read_u16!(self.reader);
@@ -563,7 +574,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         Ok(())
     }
 
-    pub fn read_end_central_directory(&mut self) -> Result<(), io::Error> {
+    fn read_end_central_directory(&mut self) -> Result<(), io::Error> {
         let disk_num = read_u16!(self.reader);
         let disk_central_dir_num = read_u16!(self.reader);
         let disk_entires = read_u16!(self.reader);
@@ -593,6 +604,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         Ok(())
     }
 
+    /// Consume self and return list of files
     pub fn files(self) -> Vec<ZippedFile> {
         self.files
     }
@@ -603,9 +615,12 @@ impl ZippedArchive<BufReader<File>> {
         p: P,
     ) -> Result<ZippedArchive<BufReader<File>>, io::Error> {
         let buffer = BufReader::new(File::open(p).unwrap());
-        ZippedArchive::from_buffer(buffer)
+        ZippedArchive::from_bufreader(buffer)
     }
 }
+
+#[cfg(test)]
+mod test {}
 
 fn main() -> io::Result<()> {
     let zip = ZippedArchive::from_path(FILE_PATH).unzip()?;
