@@ -165,6 +165,16 @@ pub struct CentralDirectory {
     pub local_header_offset: u32,
 }
 
+#[derive(Debug, Default)]
+pub struct EndCentralDirectory {
+    pub disk_num: u16,
+    pub disk_central_dir_num: u16,
+    pub disk_entires: u16,
+    pub total_entires: u16,
+    pub central_dir_size: u32,
+    pub central_dir_offset: u32,
+    pub comment: Option<String>,
+}
 #[derive(Debug, Copy, Clone, Default)]
 pub struct DateTimeModified {
     second: u8,
@@ -380,6 +390,7 @@ pub struct ZippedFile {
 pub struct ZippedArchive<R: Read + BufRead> {
     files: Vec<ZippedFile>,
     central_directory: CentralDirectory,
+    end_central_directory: EndCentralDirectory,
     reader: R,
 }
 
@@ -388,6 +399,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         ZippedArchive {
             files: Vec::new(),
             central_directory: Default::default(),
+            end_central_directory: Default::default(),
             reader: r,
         }
     }
@@ -397,11 +409,16 @@ impl<R: Read + BufRead> ZippedArchive<R> {
         assert_eq!(read_bytes_to_buffer!(self.reader, 4), LOCAL_FILE_SIGNATURE);
 
         loop {
+            let buf = read_bytes_to_buffer!(self.reader, 4);
             // Match on header using magic bytes
-            match read_bytes_to_buffer!(self.reader, 4) {
+            match buf {
                 LOCAL_FILE_SIGNATURE => self.read_file()?,
                 CENTRAL_DIRECTORY_SIGNATURE => self.read_central_directory()?,
-                _ => unimplemented!(),
+                END_CENTRAL_DIRECTORY_SIGNATURE => {
+                    self.read_end_central_directory()?;
+                    break;
+                },
+                _ => eprintln!("{:?}", buf),
             };
         }
 
@@ -525,6 +542,36 @@ impl<R: Read + BufRead> ZippedArchive<R> {
             zip_specification_version,
             local_header_offset,
         };
+        Ok(())
+    }
+
+    pub fn read_end_central_directory(&mut self) -> Result<(), io::Error> {
+        let disk_num = read_u16!(self.reader);
+        let disk_central_dir_num = read_u16!(self.reader);
+        let disk_entires = read_u16!(self.reader);
+        let total_entires = read_u16!(self.reader);
+        let central_dir_size = read_u32!(self.reader);
+        let central_dir_offset = read_u32!(self.reader);
+        let comment_len = read_u16!(self.reader);
+
+        let comment = if comment_len > 0 {
+            let mut comment_buffer = vec![0u8; comment_len as usize];
+            self.reader.read_exact(&mut comment_buffer)?;
+            Some(std::str::from_utf8(&comment_buffer).unwrap().to_string())
+        } else {
+            None
+        };
+
+        self.end_central_directory = EndCentralDirectory {
+            disk_num,
+            disk_central_dir_num,
+            disk_entires,
+            total_entires,
+            central_dir_size,
+            central_dir_offset,
+            comment,
+        };
+
         Ok(())
     }
 }
