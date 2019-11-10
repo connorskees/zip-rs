@@ -132,8 +132,8 @@ pub struct CentralDirectory<'a> {
 
 #[derive(Debug)]
 pub struct DataDescriptor {
-    uncompressed_size: u64,
-    compressed_size: u64,
+    pub uncompressed_size: u64,
+    pub compressed_size: u64,
 }
 
 #[derive(Debug, Copy, Clone)]
