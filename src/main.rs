@@ -122,12 +122,6 @@ impl OS {
 }
 
 #[derive(Debug)]
-pub struct CentralDirectory<'a> {
-    version: Version,
-    metadata: ZippedFileMetadata<'a>,
-    comment: Option<&'a str>,
-    internal_attributes: InternalAttributes,
-    external_attributes: ExternalAttributes,
 pub enum ExternalAttributes {
     TODO,
 }
@@ -138,6 +132,16 @@ impl Default for ExternalAttributes {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct CentralDirectory {
+    pub os: OS,
+    pub metadata: ZippedFileMetadata,
+    pub comment: Option<String>,
+    pub disk_num_start: u16,
+    pub internal_attributes: InternalAttributes,
+    pub external_attributes: ExternalAttributes,
+    pub zip_specification_version: u8,
+    pub local_header_offset: u32,
 }
 
 #[derive(Debug)]
