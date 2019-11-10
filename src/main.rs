@@ -227,14 +227,17 @@ impl Default for CompressionMethod {
     }
 }
 
-#[derive(Debug)]
-pub struct ZippedFileMetadata<'a> {
+#[derive(Debug, Default)]
+pub struct ZippedFileMetadata {
+    pub version_needed: u16,
     pub compression_method: CompressionMethod,
     pub date_time_modified: DateTimeModified,
     pub flags: ZipFlags,
-    pub name: &'a str,
+    pub name: String,
     pub compressed_size: u64,
     pub uncompressed_size: u64,
+    pub crc: [u8; 4],
+    pub extra_fields: Vec<u8>,
 }
 
 #[derive(Debug, Copy, Clone)]
