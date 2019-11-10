@@ -421,6 +421,40 @@ impl<'a, R: Read + BufRead> ZippedArchive<'a, R> {
         });
         Ok(())
     }
+
+    pub fn read_central_directory(&mut self) -> Result<(), io::Error> {
+        let os = OS::from_u8(read_u8!(self.reader));
+        let zip_specification_version = read_u8!(self.reader);
+        let version_needed = read_u16!(self.reader);
+        let bit_flags = ZipFlags::from_bytes(read_bytes_to_buffer!(self.reader, 2));
+        let compression_method = CompressionMethod::from_u16(read_u16!(self.reader));
+        let date_time_modified =
+            DateTimeModified::from_bytes(read_bytes_to_buffer!(self.reader, 4));
+        let crc: [u8; 4] = read_bytes_to_buffer!(self.reader, 4);
+        let uncompressed_size = u64::from(read_u32!(self.reader));
+        let compressed_size = u64::from(read_u32!(self.reader));
+        let file_name_len = read_u16!(self.reader);
+        let extra_field_len = read_u16!(self.reader);
+        let comment_len = read_u16!(self.reader);
+        let disk_num_start = read_u16!(self.reader);
+        let internal_attributes =
+            InternalAttributes::from_bytes(read_bytes_to_buffer!(self.reader, 2));
+        let external_attributes: [u8; 4] = read_bytes_to_buffer!(self.reader, 4);
+        let local_header_offset = read_u32!(self.reader);
+
+        let mut file_name_buffer = vec![0u8; file_name_len as usize];
+        self.reader.read_exact(&mut file_name_buffer)?;
+
+        let file_name = std::str::from_utf8(&file_name_buffer).unwrap().to_string();
+
+        let mut extra_field_buffer = vec![0u8; extra_field_len as usize];
+        self.reader.read_exact(&mut extra_field_buffer)?;
+
+        let comment = if comment_len > 0 {
+            let mut comment_buffer = vec![0u8; comment_len as usize];
+            self.reader.read_exact(&mut comment_buffer)?;
+
+            Some(std::str::from_utf8(&comment_buffer).unwrap().to_string())
         } else {
             None
         };
