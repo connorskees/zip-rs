@@ -87,17 +87,39 @@ pub enum Version {
     Unused,
 }
 
-#[derive(Debug)]
-pub enum InternalAttributes {
-    ASCIIFile,
-    Reserved,
-    // TODO
-    ControlFieldRecordsPrecedeLogicalRecords,
-    Unused,
+impl Default for OS {
+    fn default() -> OS {
+        OS::Unused
+    }
 }
 
-#[derive(Debug)]
-pub enum ExternalAttributes {}
+impl OS {
+    pub fn from_u8(n: u8) -> OS {
+        match n {
+            0 => OS::DOS,
+            1 => OS::Amiga,
+            2 => OS::OpenVMS,
+            3 => OS::UNIX,
+            4 => OS::VM,
+            5 => OS::AtariST,
+            6 => OS::OS2HPFS,
+            7 => OS::Macintosh,
+            8 => OS::ZSystem,
+            9 => OS::CPM,
+            10 => OS::WindowsNTFS,
+            11 => OS::MVS,
+            12 => OS::VSE,
+            13 => OS::AcornRisc,
+            14 => OS::VFAT,
+            15 => OS::AlternateMVS,
+            16 => OS::BeOS,
+            17 => OS::Tandem,
+            18 => OS::OS400,
+            19 => OS::Darwin,
+            20..=255 => OS::Unused,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct CentralDirectory<'a> {
