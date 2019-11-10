@@ -377,20 +377,20 @@ impl ZipFlags {
 
 /// A single file within a ZIP archive
 #[derive(Debug)]
-pub struct ZippedFile<'a> {
+pub struct ZippedFile {
     metadata: ZippedFileMetadata,
-    data: &'a [u8],
+    data: Vec<u8>,
 }
 
 #[derive(Debug)]
-pub struct ZippedArchive<'a, R: Read + BufRead> {
-    files: Vec<ZippedFile<'a>>,
+pub struct ZippedArchive<R: Read + BufRead> {
+    files: Vec<ZippedFile>,
     central_directory: CentralDirectory,
     reader: R,
 }
 
-impl<'a, R: Read + BufRead> ZippedArchive<'a, R> {
-    pub fn from_buffer(r: R) -> ZippedArchive<'a, R> {
+impl<R: Read + BufRead> ZippedArchive<R> {
+    pub fn from_buffer(r: R) -> ZippedArchive<R> {
         ZippedArchive {
             files: Vec::new(),
             central_directory: Default::default(),
@@ -461,11 +461,14 @@ impl<'a, R: Read + BufRead> ZippedArchive<'a, R> {
             metadata.uncompressed_size = u64::from(read_u32!(self.reader));
         }
 
+        let mut file_data_buffer = vec![0u8; metadata.compressed_size as usize];
+        self.reader.read_exact(&mut file_data_buffer)?;
+
         dbg!(&metadata);
 
         self.files.push(ZippedFile {
             metadata,
-            data: &[0u8],
+            data: file_data_buffer,
         });
         Ok(())
     }
@@ -501,7 +504,6 @@ impl<'a, R: Read + BufRead> ZippedArchive<'a, R> {
         let comment = if comment_len > 0 {
             let mut comment_buffer = vec![0u8; comment_len as usize];
             self.reader.read_exact(&mut comment_buffer)?;
-
             Some(std::str::from_utf8(&comment_buffer).unwrap().to_string())
         } else {
             None
@@ -533,9 +535,9 @@ impl<'a, R: Read + BufRead> ZippedArchive<'a, R> {
     }
 }
 
-impl<'a> ZippedArchive<'a, BufReader<File>> {
-    pub fn from_path<P: AsRef<std::path::Path>>(p: P) -> ZippedArchive<'a, BufReader<File>> {
-        let buffer = BufReader::new(File::open(FILE_PATH).unwrap());
+impl ZippedArchive<BufReader<File>> {
+    pub fn from_path<P: AsRef<std::path::Path>>(p: P) -> ZippedArchive<BufReader<File>> {
+        let buffer = BufReader::new(File::open(p).unwrap());
         ZippedArchive::from_buffer(buffer)
     }
 }
