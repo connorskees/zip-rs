@@ -15,6 +15,50 @@ const FILE_PATH: &str = "test.zip";
 const LOCAL_FILE_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x03, 0x04];
 // const CENTRAL_DIRECTORY_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x01, 0x02];
 // const END_CENTRAL_DIRECTORY_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
+macro_rules! read_bytes_to_buffer {
+    ($reader:expr, $bytes:literal) => {
+        if let Some(mut buffer) = Some([0u8; $bytes]) {
+            $reader.read_exact(&mut buffer)?;
+            // u32::from_le_bytes(buffer).to_be_bytes()
+            buffer
+        } else {
+            unreachable!()
+        }
+    };
+}
+
+macro_rules! read_u8 {
+    ($reader:expr) => {
+        if let Some(mut buffer) = Some([0u8]) {
+            $reader.read_exact(&mut buffer)?;
+            u8::from_le_bytes(buffer)
+        } else {
+            unreachable!()
+        }
+    };
+}
+
+macro_rules! read_u16 {
+    ($reader:expr) => {
+        if let Some(mut buffer) = Some([0u8; 2]) {
+            $reader.read_exact(&mut buffer)?;
+            u16::from_le_bytes(buffer)
+        } else {
+            unreachable!()
+        }
+    };
+}
+
+macro_rules! read_u32 {
+    ($reader:expr) => {
+        if let Some(mut buffer) = Some([0u8; 4]) {
+            $reader.read_exact(&mut buffer)?;
+            u32::from_le_bytes(buffer)
+        } else {
+            unreachable!()
+        }
+    };
+}
 
 #[derive(Debug)]
 pub enum Version {
