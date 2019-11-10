@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 bitreader = "0.3.2"
+flate2 = "1.0.12"

@@ -2,6 +2,7 @@
 #![deny(missing_debug_implementations)]
 
 extern crate bitreader;
+extern crate flate2;
 
 use std::default::Default;
 use std::fmt;
@@ -10,6 +11,7 @@ use std::io;
 use std::io::{BufRead, BufReader, Read};
 
 use bitreader::BitReader;
+use flate2::read::DeflateDecoder;
 
 // TODO // u32::from_le_bytes(buffer).to_be_bytes()
 
@@ -221,16 +223,16 @@ impl DateTimeModified {
 #[derive(Debug, Copy, Clone)]
 pub enum CompressionMethod {
     None = 0,
-    Shrunk = 1,
+    Shrink = 1,
     Factor1 = 2,
     Factor2 = 3,
     Factor3 = 4,
     Factor4 = 5,
-    Imploded = 6,
+    Implode = 6,
     Reserved = 7,
-    Deflated = 8,
-    EnhancedDeflated = 9,
-    PKWareDclImploded = 10,
+    Deflate = 8,
+    EnhancedDeflate = 9,
+    PKWareDclImplode = 10,
     BZIP2 = 12,
     LZMA = 14,
     IbmTerse = 18,
@@ -242,16 +244,16 @@ impl CompressionMethod {
     pub fn from_i64(n: i64) -> CompressionMethod {
         match n {
             0 => CompressionMethod::None,
-            1 => CompressionMethod::Shrunk,
+            1 => CompressionMethod::Shrink,
             2 => CompressionMethod::Factor1,
             3 => CompressionMethod::Factor2,
             4 => CompressionMethod::Factor3,
             5 => CompressionMethod::Factor4,
-            6 => CompressionMethod::Imploded,
+            6 => CompressionMethod::Implode,
             7 | 11 | 13 | 15..=17 => CompressionMethod::Reserved,
-            8 => CompressionMethod::Deflated,
-            9 => CompressionMethod::EnhancedDeflated,
-            10 => CompressionMethod::PKWareDclImploded,
+            8 => CompressionMethod::Deflate,
+            9 => CompressionMethod::EnhancedDeflate,
+            10 => CompressionMethod::PKWareDclImplode,
             12 => CompressionMethod::BZIP2,
             14 => CompressionMethod::LZMA,
             18 => CompressionMethod::IbmTerse,
@@ -386,6 +388,21 @@ pub struct ZippedFile {
     data: Vec<u8>,
 }
 
+impl ZippedFile {
+    pub fn data(self) -> Vec<u8> {
+        match self.metadata.compression_method {
+            CompressionMethod::None => self.data,
+            CompressionMethod::Deflate => {
+                let mut deflater = DeflateDecoder::new(&self.data[..]);
+                let mut buffer = Vec::new();
+                deflater.read_to_end(&mut buffer).unwrap();
+                buffer
+            }
+            _ => unimplemented!("this compression method is currently unsupported"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ZippedArchive<R: Read + BufRead> {
     files: Vec<ZippedFile>,
@@ -469,7 +486,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
             metadata.uncompressed_size = u64::from(read_u32!(self.reader));
         }
 
-        let mut file_data_buffer = vec![0u8; metadata.compressed_size as usize];
+        let mut file_data_buffer = vec![0u8; metadata.uncompressed_size as usize];
         self.reader.read_exact(&mut file_data_buffer)?;
 
         dbg!(&metadata);
