@@ -63,7 +63,7 @@ macro_rules! read_u32 {
 }
 
 #[derive(Debug)]
-pub enum Version {
+pub enum OS {
     DOS = 0,
     Amiga = 1,
     OpenVMS = 2,
@@ -128,6 +128,16 @@ pub struct CentralDirectory<'a> {
     comment: Option<&'a str>,
     internal_attributes: InternalAttributes,
     external_attributes: ExternalAttributes,
+pub enum ExternalAttributes {
+    TODO,
+}
+
+impl Default for ExternalAttributes {
+    fn default() -> ExternalAttributes {
+        ExternalAttributes::TODO
+    }
+}
+
 }
 
 #[derive(Debug)]
@@ -136,7 +146,7 @@ pub struct DataDescriptor {
     pub compressed_size: u64,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct DateTimeModified {
     second: u8,
     minute: u8,
@@ -240,7 +250,7 @@ pub struct ZippedFileMetadata {
     pub extra_fields: Vec<u8>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct ZipFlags {
     is_encrypted: bool,
     /*
