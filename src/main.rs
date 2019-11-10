@@ -121,6 +121,25 @@ impl OS {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct InternalAttributes {
+    is_ascii: bool,
+    control_field_records_precede_logical_records: bool,
+}
+
+impl InternalAttributes {
+    pub fn from_bytes(b: [u8; 2]) -> InternalAttributes {
+        let mut bit_reader = BitReader::new(&b);
+        let is_ascii = bit_reader.read_u8(1).unwrap() == 1u8;
+        bit_reader.skip(1).unwrap();
+        let control_field_records_precede_logical_records = bit_reader.read_u8(1).unwrap() == 1u8;
+        InternalAttributes {
+            is_ascii,
+            control_field_records_precede_logical_records,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ExternalAttributes {
     TODO,
