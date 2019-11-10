@@ -395,18 +395,18 @@ pub struct ZippedArchive<R: Read + BufRead> {
 }
 
 impl<R: Read + BufRead> ZippedArchive<R> {
-    pub fn from_buffer(r: R) -> ZippedArchive<R> {
+    pub fn from_buffer(r: R) -> Result<ZippedArchive<R>, io::Error> {
         ZippedArchive {
             files: Vec::new(),
             central_directory: Default::default(),
             end_central_directory: Default::default(),
             reader: r,
-        }
+        }.unzip()
     }
 
-    pub fn unzip(&mut self) -> io::Result<()> {
+    fn unzip(mut self) -> Result<ZippedArchive<R>, io::Error> {
         loop {
-            let buf = read_bytes_to_buffer!(self.reader, 4);
+            let buf: [u8; 4] = read_bytes_to_buffer!(self.reader, 4);
             // Match on header using magic bytes
             match buf {
                 LOCAL_FILE_SIGNATURE => self.read_file()?,
@@ -415,11 +415,11 @@ impl<R: Read + BufRead> ZippedArchive<R> {
                     self.read_end_central_directory()?;
                     break;
                 },
-                _ => eprintln!("{:?}", buf),
+                _ => eprintln!("Unrecognized header: {:?}", buf),
             };
         }
 
-        Ok(())
+        Ok(self)
     }
 
     pub fn read_metadata(&mut self) -> Result<ZippedFileMetadata, io::Error> {
@@ -574,7 +574,7 @@ impl<R: Read + BufRead> ZippedArchive<R> {
 }
 
 impl ZippedArchive<BufReader<File>> {
-    pub fn from_path<P: AsRef<std::path::Path>>(p: P) -> ZippedArchive<BufReader<File>> {
+    pub fn from_path<P: AsRef<std::path::Path>>(p: P) -> Result<ZippedArchive<BufReader<File>>, io::Error> {
         let buffer = BufReader::new(File::open(p).unwrap());
         ZippedArchive::from_buffer(buffer)
     }
