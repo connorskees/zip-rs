@@ -330,104 +330,136 @@ impl ZipFlags {
 /// A single file within a ZIP archive
 #[derive(Debug)]
 pub struct ZippedFile<'a> {
-    metadata: ZippedFileMetadata<'a>,
+    metadata: ZippedFileMetadata,
     data: &'a [u8],
 }
 
 #[derive(Debug)]
-pub struct ZippedArchive<'a> {
+pub struct ZippedArchive<'a, R: Read + BufRead> {
     files: Vec<ZippedFile<'a>>,
-    central_directory: CentralDirectory<'a>,
+    central_directory: CentralDirectory,
+    reader: R,
 }
 
-macro_rules! read_bytes_to_buffer {
-    ($reader:ident, $bytes:literal) => {
-        if let Some(mut buffer) = Some([0u8; $bytes]) {
-            $reader.read_exact(&mut buffer)?;
-            // u32::from_le_bytes(buffer).to_be_bytes()
-            buffer
-        } else {
-            unreachable!()
+impl<'a, R: Read + BufRead> ZippedArchive<'a, R> {
+    pub fn from_buffer(r: R) -> ZippedArchive<'a, R> {
+        ZippedArchive {
+            files: Vec::new(),
+            central_directory: Default::default(),
+            reader: r,
         }
-    };
+    }
+
+    pub fn unzip(&mut self) -> io::Result<()> {
+        // Check file magic bytes
+        assert_eq!(read_bytes_to_buffer!(self.reader, 4), LOCAL_FILE_SIGNATURE);
+
+        loop {
+            // Match on header using magic bytes
+            match read_bytes_to_buffer!(self.reader, 4) {
+                LOCAL_FILE_SIGNATURE => self.read_file()?,
+                CENTRAL_DIRECTORY_SIGNATURE => self.read_central_directory()?,
+                _ => unimplemented!(),
+            };
+        }
+
+        Ok(())
+    }
+
+    pub fn read_metadata(&mut self) -> Result<ZippedFileMetadata, io::Error> {
+        let version_needed = read_u16!(self.reader);
+        let bit_flags = ZipFlags::from_bytes(read_bytes_to_buffer!(self.reader, 2));
+        let compression_method = CompressionMethod::from_u16(read_u16!(self.reader));
+        let last_mod_date_time =
+            DateTimeModified::from_bytes(read_bytes_to_buffer!(self.reader, 4));
+        let crc: [u8; 4] = read_bytes_to_buffer!(self.reader, 4);
+        let uncompressed_size = u64::from(read_u32!(self.reader));
+        let compressed_size = u64::from(read_u32!(self.reader));
+        let file_name_len = read_u16!(self.reader);
+        let extra_field_len = read_u16!(self.reader);
+
+        let mut file_name_buffer = vec![0u8; file_name_len as usize];
+        self.reader.read_exact(&mut file_name_buffer)?;
+
+        let mut extra_field_buffer = vec![0u8; extra_field_len as usize];
+        self.reader.read_exact(&mut extra_field_buffer)?;
+
+        let file_name = std::str::from_utf8(&file_name_buffer).unwrap().to_string();
+
+        Ok(ZippedFileMetadata {
+            version_needed,
+            compression_method,
+            date_time_modified: last_mod_date_time,
+            flags: bit_flags,
+            name: file_name,
+            crc,
+            compressed_size: compressed_size,
+            uncompressed_size: uncompressed_size,
+            extra_fields: Vec::from(extra_field_buffer),
+        })
+    }
+
+    pub fn read_file(&mut self) -> Result<(), io::Error> {
+        let mut metadata = self.read_metadata()?;
+
+        if metadata.flags.has_data_descriptor {
+            let optional_signature: [u8; 4] = read_bytes_to_buffer!(self.reader, 4);
+            metadata.crc = if optional_signature == DATA_DESCRIPTOR_SIGNATURE {
+                read_bytes_to_buffer!(self.reader, 4)
+            } else {
+                optional_signature
+            };
+            metadata.compressed_size = u64::from(read_u32!(self.reader));
+            metadata.uncompressed_size = u64::from(read_u32!(self.reader));
+        }
+
+        dbg!(&metadata);
+
+        self.files.push(ZippedFile {
+            metadata,
+            data: &[0u8],
+        });
+        Ok(())
+    }
+        } else {
+            None
+        };
+
+        let metadata = ZippedFileMetadata {
+            version_needed,
+            compression_method,
+            date_time_modified,
+            flags: bit_flags,
+            name: file_name,
+            crc,
+            compressed_size: compressed_size,
+            uncompressed_size: uncompressed_size,
+            extra_fields: Vec::from(extra_field_buffer),
+        };
+
+        self.central_directory = CentralDirectory {
+            os,
+            comment,
+            metadata,
+            internal_attributes,
+            external_attributes: ExternalAttributes::TODO,
+            disk_num_start,
+            zip_specification_version,
+            local_header_offset,
+        };
+        Ok(())
+    }
 }
 
-macro_rules! read_u8 {
-    ($reader:ident) => {
-        if let Some(mut buffer) = Some([0u8]) {
-            $reader.read_exact(&mut buffer)?;
-            u8::from_le_bytes(buffer)
-        } else {
-            unreachable!()
-        }
-    };
-}
-
-macro_rules! read_u16 {
-    ($reader:ident) => {
-        if let Some(mut buffer) = Some([0u8; 2]) {
-            $reader.read_exact(&mut buffer)?;
-            u16::from_le_bytes(buffer)
-        } else {
-            unreachable!()
-        }
-    };
-}
-
-macro_rules! read_u32 {
-    ($reader:ident) => {
-        if let Some(mut buffer) = Some([0u8; 4]) {
-            $reader.read_exact(&mut buffer)?;
-            u32::from_le_bytes(buffer)
-        } else {
-            unreachable!()
-        }
-    };
+impl<'a> ZippedArchive<'a, BufReader<File>> {
+    pub fn from_path<P: AsRef<std::path::Path>>(p: P) -> ZippedArchive<'a, BufReader<File>> {
+        let buffer = BufReader::new(File::open(FILE_PATH).unwrap());
+        ZippedArchive::from_buffer(buffer)
+    }
 }
 
 fn main() -> io::Result<()> {
-    let mut reader = BufReader::new(File::open(FILE_PATH)?);
-
-    let mut buffer: [u8; 4] = [0u8; 4];
-    reader.read_exact(&mut buffer)?;
-    assert_eq!(buffer, LOCAL_FILE_SIGNATURE);
-
-    let version = read_u16!(reader);
-    let bit_flags = ZipFlags::from_bytes(read_bytes_to_buffer!(reader, 2));
-    let compression_method = CompressionMethod::from_u16(read_u16!(reader));
-    let last_mod_date_time = DateTimeModified::from_bytes(read_bytes_to_buffer!(reader, 4));
-    let crc = read_u32!(reader);
-    let uncompressed_size = u64::from(read_u32!(reader));
-    let compressed_size = u64::from(read_u32!(reader));
-    let file_name_len = read_u16!(reader);
-    let extra_field_len = read_u16!(reader);
-
-    // dbg!(
-    //     version,
-    //     last_mod_date_time,
-    //     compression_method,
-    //     uncompressed_size,
-    //     compressed_size,
-    //     file_name_len
-    // );
-
-    let mut file_name_buffer = vec![0u8; file_name_len as usize];
-    reader.read_exact(&mut file_name_buffer)?;
-
-    let file_name = std::str::from_utf8(&file_name_buffer).unwrap();
-
-    dbg!(file_name);
-
-    let metadata = ZippedFileMetadata {
-        compression_method: compression_method,
-        date_time_modified: last_mod_date_time,
-        flags: bit_flags,
-        name: file_name,
-        compressed_size: compressed_size,
-        uncompressed_size: uncompressed_size,
-    };
-
-    dbg!(metadata);
+    let zip = ZippedArchive::from_path(FILE_PATH).unzip()?;
 
     // dbg!(bit_reader.read_u8(2).unwrap());
     Ok(())
