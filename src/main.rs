@@ -418,7 +418,8 @@ impl<R: Read + BufRead> ZippedArchive<R> {
             central_directory: Default::default(),
             end_central_directory: Default::default(),
             reader: r,
-        }.unzip()
+        }
+        .unzip()
     }
 
     fn unzip(mut self) -> Result<ZippedArchive<R>, io::Error> {
@@ -431,8 +432,11 @@ impl<R: Read + BufRead> ZippedArchive<R> {
                 END_CENTRAL_DIRECTORY_SIGNATURE => {
                     self.read_end_central_directory()?;
                     break;
-                },
-                _ => eprintln!("Unrecognized header: {:?}", buf),
+                }
+                _ => {
+                    eprintln!("Unrecognized header: {:x?}", buf);
+                    break;
+                }
             };
         }
 
@@ -588,10 +592,16 @@ impl<R: Read + BufRead> ZippedArchive<R> {
 
         Ok(())
     }
+
+    pub fn files(self) -> Vec<ZippedFile> {
+        self.files
+    }
 }
 
 impl ZippedArchive<BufReader<File>> {
-    pub fn from_path<P: AsRef<std::path::Path>>(p: P) -> Result<ZippedArchive<BufReader<File>>, io::Error> {
+    pub fn from_path<P: AsRef<std::path::Path>>(
+        p: P,
+    ) -> Result<ZippedArchive<BufReader<File>>, io::Error> {
         let buffer = BufReader::new(File::open(p).unwrap());
         ZippedArchive::from_buffer(buffer)
     }
