@@ -1,3 +1,7 @@
+//! # zip-rs
+//! ## Unzip archives in memory
+//! 
+
 #![deny(missing_debug_implementations, unsafe_code)]
 
 extern crate bitreader;
@@ -621,10 +625,3 @@ impl ZippedArchive<BufReader<File>> {
 
 #[cfg(test)]
 mod test {}
-
-fn main() -> io::Result<()> {
-    let zip = ZippedArchive::from_path(FILE_PATH).unzip()?;
-
-    // dbg!(bit_reader.read_u8(2).unwrap());
-    Ok(())
-}
