@@ -405,9 +405,6 @@ impl<R: Read + BufRead> ZippedArchive<R> {
     }
 
     pub fn unzip(&mut self) -> io::Result<()> {
-        // Check file magic bytes
-        assert_eq!(read_bytes_to_buffer!(self.reader, 4), LOCAL_FILE_SIGNATURE);
-
         loop {
             let buf = read_bytes_to_buffer!(self.reader, 4);
             // Match on header using magic bytes
