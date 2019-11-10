@@ -4,11 +4,14 @@
 extern crate bitreader;
 
 use std::default::Default;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, Read};
 
 use bitreader::BitReader;
+
+// TODO // u32::from_le_bytes(buffer).to_be_bytes()
 
 const FILE_PATH: &str = "test.zip";
 /// ZIP file magic bytes
@@ -21,7 +24,6 @@ macro_rules! read_bytes_to_buffer {
     ($reader:expr, $bytes:literal) => {
         if let Some(mut buffer) = Some([0u8; $bytes]) {
             $reader.read_exact(&mut buffer)?;
-            // u32::from_le_bytes(buffer).to_be_bytes()
             buffer
         } else {
             unreachable!()
@@ -178,6 +180,16 @@ pub struct DateTimeModified {
     month: u8,
     // years since 1980
     year: u16,
+}
+
+impl fmt::Display for DateTimeModified {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:0>4}-{:0>2}-{:0>2}T{:0>2}:{:0>2}:{:0>2}",
+            self.year, self.month, self.day, self.hour, self.minute, self.second
+        )
+    }
 }
 
 impl DateTimeModified {
