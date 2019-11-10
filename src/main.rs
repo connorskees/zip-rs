@@ -165,12 +165,6 @@ pub struct CentralDirectory {
     pub local_header_offset: u32,
 }
 
-#[derive(Debug)]
-pub struct DataDescriptor {
-    pub uncompressed_size: u64,
-    pub compressed_size: u64,
-}
-
 #[derive(Debug, Copy, Clone, Default)]
 pub struct DateTimeModified {
     second: u8,
