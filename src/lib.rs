@@ -1,6 +1,7 @@
 #![deny(missing_debug_implementations)]
 
 use std::{
+    borrow::Cow,
     fs::File,
     io::{self, Read},
     path::Path,
@@ -54,24 +55,24 @@ pub struct CompressedZipFile<'a> {
 }
 
 impl<'a> CompressedZipFile<'a> {
-    pub fn decompressed_contents(&self) -> io::Result<Vec<u8>> {
+    pub fn decompressed_contents(&self) -> io::Result<Cow<[u8]>> {
         // disallow decompressing files over 1gb to avoid zip bombs
         assert!(
             self.metadata.uncompressed_size < 1_000_000,
             "decompressing files larger than 5gb is not supported"
         );
 
-        let mut out = vec![0; self.metadata.uncompressed_size as usize];
-
         match self.metadata.compression_method {
-            CompressionMethod::None => return Ok(self.contents.to_vec()),
+            CompressionMethod::None => return Ok(Cow::Borrowed(self.contents)),
             CompressionMethod::Deflate => {
-                DeflateDecoder::new(self.contents).read_exact(&mut out)?;
-            }
-            method => println!("unimplemented compression method {:?}", method),
-        }
+                let mut out = vec![0; self.metadata.uncompressed_size as usize];
 
-        Ok(out)
+                DeflateDecoder::new(self.contents).read_exact(&mut out)?;
+
+                Ok(Cow::Owned(out))
+            }
+            method => todo!("unimplemented compression method {:?}", method),
+        }
     }
 
     pub fn file_path(&self) -> Result<&Path, Utf8Error> {
