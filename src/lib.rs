@@ -55,12 +55,18 @@ pub struct CompressedZipFile<'a> {
 
 impl<'a> CompressedZipFile<'a> {
     pub fn decompressed_contents(&self) -> io::Result<Vec<u8>> {
-        let mut out = Vec::new();
+        // disallow decompressing files over 1gb to avoid zip bombs
+        assert!(
+            self.metadata.uncompressed_size < 1_000_000,
+            "decompressing files larger than 5gb is not supported"
+        );
+
+        let mut out = vec![0; self.metadata.uncompressed_size as usize];
 
         match self.metadata.compression_method {
             CompressionMethod::None => return Ok(self.contents.to_vec()),
             CompressionMethod::Deflate => {
-                DeflateDecoder::new(self.contents).read_to_end(&mut out)?;
+                DeflateDecoder::new(self.contents).read_exact(&mut out)?;
             }
             method => println!("unimplemented compression method {:?}", method),
         }
@@ -113,5 +119,24 @@ impl<'a> ZipArchive<'a> {
         files
             .into_iter()
             .map(move |file_header| self.parser.read_file(&file_header))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::ZipArchive;
+
+    #[test]
+    #[should_panic]
+    fn zip_bomb() {
+        let mut bomb = ZipArchive::from_path("files/bomb.zip").unwrap();
+
+        for file in bomb.files() {
+            let file = file.unwrap();
+
+            dbg!(file.file_path());
+
+            dbg!(file.decompressed_contents());
+        }
     }
 }
