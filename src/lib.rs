@@ -37,7 +37,7 @@ pub(crate) struct EndCentralDirectory {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Metadata<'a> {
+pub struct Metadata<'a> {
     pub(crate) version_needed: u16,
     pub(crate) compression_method: CompressionMethod,
     pub(crate) date_time_modified: DateTimeModified,
@@ -50,15 +50,19 @@ pub(crate) struct Metadata<'a> {
 
 #[derive(Debug)]
 pub struct CompressedZipFile<'a> {
-    metadata: Metadata<'a>,
+    pub metadata: Metadata<'a>,
     contents: &'a [u8],
 }
 
 impl<'a> CompressedZipFile<'a> {
+    pub fn compressed_contents(&self) -> &[u8] {
+        self.contents
+    }
+
     pub fn decompressed_contents(&self) -> io::Result<Cow<[u8]>> {
-        // disallow decompressing files over 1gb to avoid zip bombs
+        // disallow decompressing files over 5gb to avoid zip bombs
         assert!(
-            self.metadata.uncompressed_size < 1_000_000,
+            self.metadata.uncompressed_size < 5_000_000,
             "decompressing files larger than 5gb is not supported"
         );
 
@@ -83,6 +87,10 @@ impl<'a> CompressedZipFile<'a> {
 
     pub fn file_path_bytes(&self) -> &'a [u8] {
         self.metadata.name
+    }
+
+    pub fn compression_method(&self) -> CompressionMethod {
+        self.metadata.compression_method
     }
 }
 
