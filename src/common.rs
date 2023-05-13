@@ -4,7 +4,17 @@ pub const DATA_DESCRIPTOR_SIGNATURE: [u8; 4] = [0x08, 0x07, 0x4b, 0x50];
 pub const END_CENTRAL_DIRECTORY_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
 
 #[derive(Debug, Clone, Copy)]
-pub enum OS {
+pub struct Os(pub u8);
+
+impl Os {
+    pub fn name(self) -> OsName {
+        OsName::from_u8(self.0)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum OsName {
     Dos = 0,
     Amiga = 1,
     OpenVMS = 2,
@@ -28,30 +38,30 @@ pub enum OS {
     Unused,
 }
 
-impl OS {
-    pub fn from_u8(n: u8) -> OS {
+impl OsName {
+    pub fn from_u8(n: u8) -> OsName {
         match n {
-            0 => OS::Dos,
-            1 => OS::Amiga,
-            2 => OS::OpenVMS,
-            3 => OS::Unix,
-            4 => OS::VM,
-            5 => OS::AtariST,
-            6 => OS::OS2HPFS,
-            7 => OS::Macintosh,
-            8 => OS::ZSystem,
-            9 => OS::Cpm,
-            10 => OS::WindowsNtfs,
-            11 => OS::Mvs,
-            12 => OS::Vse,
-            13 => OS::AcornRisc,
-            14 => OS::Vfat,
-            15 => OS::AlternateMVS,
-            16 => OS::BeOS,
-            17 => OS::Tandem,
-            18 => OS::OS400,
-            19 => OS::Darwin,
-            20..=255 => OS::Unused,
+            0 => OsName::Dos,
+            1 => OsName::Amiga,
+            2 => OsName::OpenVMS,
+            3 => OsName::Unix,
+            4 => OsName::VM,
+            5 => OsName::AtariST,
+            6 => OsName::OS2HPFS,
+            7 => OsName::Macintosh,
+            8 => OsName::ZSystem,
+            9 => OsName::Cpm,
+            10 => OsName::WindowsNtfs,
+            11 => OsName::Mvs,
+            12 => OsName::Vse,
+            13 => OsName::AcornRisc,
+            14 => OsName::Vfat,
+            15 => OsName::AlternateMVS,
+            16 => OsName::BeOS,
+            17 => OsName::Tandem,
+            18 => OsName::OS400,
+            19 => OsName::Darwin,
+            20..=255 => OsName::Unused,
         }
     }
 }
@@ -66,7 +76,16 @@ impl DateTimeModified {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum CompressionMethod {
+pub struct CompressionMethod(pub u16);
+
+impl CompressionMethod {
+    pub fn name(self) -> CompressionMethodName {
+        CompressionMethodName::from_u16(self.0)
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum CompressionMethodName {
     None = 0,
     Shrink = 1,
     Factor1 = 2,
@@ -83,35 +102,30 @@ pub enum CompressionMethod {
     IbmTerse = 18,
     IbmLZ77z = 19,
     PPMd = 98,
+    Unknown,
 }
 
-impl CompressionMethod {
-    pub fn from_i64(n: i64) -> CompressionMethod {
+impl CompressionMethodName {
+    pub fn from_u16(n: u16) -> CompressionMethodName {
         match n {
-            0 => CompressionMethod::None,
-            1 => CompressionMethod::Shrink,
-            2 => CompressionMethod::Factor1,
-            3 => CompressionMethod::Factor2,
-            4 => CompressionMethod::Factor3,
-            5 => CompressionMethod::Factor4,
-            6 => CompressionMethod::Implode,
-            7 | 11 | 13 | 15..=17 => CompressionMethod::Reserved,
-            8 => CompressionMethod::Deflate,
-            9 => CompressionMethod::EnhancedDeflate,
-            10 => CompressionMethod::PKWareDclImplode,
-            12 => CompressionMethod::Bzip2,
-            14 => CompressionMethod::Lzma,
-            18 => CompressionMethod::IbmTerse,
-            19 => CompressionMethod::IbmLZ77z,
-            98 => CompressionMethod::PPMd,
-            _ => unimplemented!(),
+            0 => CompressionMethodName::None,
+            1 => CompressionMethodName::Shrink,
+            2 => CompressionMethodName::Factor1,
+            3 => CompressionMethodName::Factor2,
+            4 => CompressionMethodName::Factor3,
+            5 => CompressionMethodName::Factor4,
+            6 => CompressionMethodName::Implode,
+            7 | 11 | 13 | 15..=17 => CompressionMethodName::Reserved,
+            8 => CompressionMethodName::Deflate,
+            9 => CompressionMethodName::EnhancedDeflate,
+            10 => CompressionMethodName::PKWareDclImplode,
+            12 => CompressionMethodName::Bzip2,
+            14 => CompressionMethodName::Lzma,
+            18 => CompressionMethodName::IbmTerse,
+            19 => CompressionMethodName::IbmLZ77z,
+            98 => CompressionMethodName::PPMd,
+            _ => CompressionMethodName::Unknown,
         }
-    }
-}
-
-impl From<u16> for CompressionMethod {
-    fn from(n: u16) -> Self {
-        CompressionMethod::from_i64(i64::from(n))
     }
 }
 

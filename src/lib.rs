@@ -20,7 +20,7 @@ use std::os::unix::ffi::OsStrExt;
 #[cfg(target_family = "windows")]
 use std::os::unix::ffi::OsStrExt;
 
-use common::*;
+pub use common::*;
 pub use error::ZipParseError;
 use flate2::read::DeflateDecoder;
 use parse::Parser;
@@ -73,7 +73,7 @@ impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
 
 #[derive(Debug, Clone)]
 pub struct CentralDirectoryFileHeader<'a> {
-    pub os: OS,
+    pub os: Os,
     pub metadata: Metadata<'a>,
     pub disk_num_start: u16,
     pub internal_attributes: InternalAttributes,
@@ -122,9 +122,9 @@ impl<'a> CompressedZipFile<'a> {
             return Err(ZipParseError::FileTooLarge(self.metadata.uncompressed_size));
         }
 
-        match self.metadata.compression_method {
-            CompressionMethod::None => return Ok(Cow::Borrowed(self.contents)),
-            CompressionMethod::Deflate => {
+        match self.metadata.compression_method.name() {
+            CompressionMethodName::None => return Ok(Cow::Borrowed(self.contents)),
+            CompressionMethodName::Deflate => {
                 let mut out = vec![0; self.metadata.uncompressed_size as usize];
 
                 DeflateDecoder::new(self.contents).read_exact(&mut out)?;

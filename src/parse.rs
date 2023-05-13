@@ -73,7 +73,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
     fn read_metadata(&mut self) -> Option<Metadata<'a>> {
         let version_needed = self.read_u16()?;
         let flags = ZipFlags(self.read_u16()?);
-        let compression_method = CompressionMethod::from(self.read_u16()?);
+        let compression_method = CompressionMethod(self.read_u16()?);
         let last_mod_date_time = DateTimeModified::from_u32(self.read_u32()?);
         let mut crc = self.read_u32()?;
         let mut compressed_size = u64::from(self.read_u32()?);
@@ -119,11 +119,11 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         let mut headers = Vec::new();
 
         while self.read_signature(CENTRAL_DIRECTORY_FILE_SIGNATURE) {
-            let os = OS::from_u8(self.read_byte()?);
+            let os = Os(self.read_byte()?);
             let zip_specification_version = self.read_byte()?;
             let version_needed = self.read_u16()?;
             let bit_flags = ZipFlags(self.read_u16()?);
-            let compression_method = CompressionMethod::from(self.read_u16()?);
+            let compression_method = CompressionMethod(self.read_u16()?);
             let date_time_modified = DateTimeModified::from_u32(self.read_u32()?);
             let crc = self.read_u32()?;
             let compressed_size = u64::from(self.read_u32()?);
