@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 use crate::{
     common::*, CentralDirectory, CentralDirectoryFileHeader, CompressedZipFile,
     EndCentralDirectory, Metadata,
@@ -5,13 +7,13 @@ use crate::{
 use memchr::memmem;
 
 #[derive(Debug)]
-pub(super) struct Parser {
-    buffer: memmap::Mmap,
+pub(super) struct Parser<B: Deref<Target = [u8]>> {
+    buffer: B,
     cursor: usize,
 }
 
-impl<'a> Parser {
-    pub fn new(buffer: memmap::Mmap) -> Self {
+impl<'a, B: Deref<Target = [u8]>> Parser<B> {
+    pub fn new(buffer: B) -> Self {
         Self { buffer, cursor: 0 }
     }
 

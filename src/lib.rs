@@ -1,9 +1,22 @@
+/*!
+ * Zip file parsing library
+ *
+ * ```no_run
+ * let file = ZipArchive::from_path("./foo.zip").unwrap();
+ *
+ * for file in files {
+ *   // ...
+ * }
+ * ```
+ */
+
 #![deny(missing_debug_implementations)]
 
 use std::{
     borrow::Cow,
     fs::File,
     io::{self, Read},
+    ops::Deref,
     path::Path,
     str::Utf8Error,
 };
@@ -16,36 +29,36 @@ mod common;
 mod parse;
 
 #[derive(Debug, Clone)]
-pub(crate) struct CentralDirectoryFileHeader<'a> {
-    pub(crate) os: OS,
-    pub(crate) metadata: Metadata<'a>,
-    pub(crate) disk_num_start: u16,
-    pub(crate) internal_attributes: InternalAttributes,
-    pub(crate) external_attributes: ExternalAttributes,
-    pub(crate) zip_specification_version: u8,
-    pub(crate) local_header_offset: u32,
+pub struct CentralDirectoryFileHeader<'a> {
+    pub os: OS,
+    pub metadata: Metadata<'a>,
+    pub disk_num_start: u16,
+    pub internal_attributes: InternalAttributes,
+    pub external_attributes: ExternalAttributes,
+    pub zip_specification_version: u8,
+    pub local_header_offset: u32,
 }
 
 #[derive(Debug)]
-pub(crate) struct EndCentralDirectory {
-    pub(crate) disk_num: u16,
-    pub(crate) disk_central_dir_num: u16,
-    pub(crate) disk_entires: u16,
-    pub(crate) total_entires: u16,
-    pub(crate) central_dir_size: u32,
-    pub(crate) central_dir_offset: u32,
+pub struct EndCentralDirectory {
+    pub disk_num: u16,
+    pub disk_central_dir_num: u16,
+    pub disk_entires: u16,
+    pub total_entires: u16,
+    pub central_dir_size: u32,
+    pub central_dir_offset: u32,
 }
 
 #[derive(Debug, Clone)]
 pub struct Metadata<'a> {
-    pub(crate) version_needed: u16,
-    pub(crate) compression_method: CompressionMethod,
-    pub(crate) date_time_modified: DateTimeModified,
-    pub(crate) flags: ZipFlags,
-    pub(crate) name: &'a [u8],
-    pub(crate) compressed_size: u64,
-    pub(crate) uncompressed_size: u64,
-    pub(crate) crc: u32,
+    pub version_needed: u16,
+    pub compression_method: CompressionMethod,
+    pub date_time_modified: DateTimeModified,
+    pub flags: ZipFlags,
+    pub name: &'a [u8],
+    pub compressed_size: u64,
+    pub uncompressed_size: u64,
+    pub crc: u32,
 }
 
 #[derive(Debug)]
@@ -96,22 +109,28 @@ impl<'a> CompressedZipFile<'a> {
 
 /// An entire ZIP archive
 #[derive(Debug)]
-pub struct ZipArchive<'a> {
-    central_directory: CentralDirectory<'a>,
-    parser: Parser,
+pub struct ZipArchive<'a, B: Deref<Target = [u8]>> {
+    pub central_directory: CentralDirectory<'a>,
+    parser: Parser<B>,
 }
 
 #[derive(Debug)]
-struct CentralDirectory<'a> {
-    files: Vec<CentralDirectoryFileHeader<'a>>,
-    end: EndCentralDirectory,
+pub struct CentralDirectory<'a> {
+    pub files: Vec<CentralDirectoryFileHeader<'a>>,
+    pub end: EndCentralDirectory,
 }
 
-impl<'a> ZipArchive<'a> {
+impl<'a> ZipArchive<'a, memmap::Mmap> {
     pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
         let file = File::open(path)?;
         let buffer = unsafe { memmap::Mmap::map(&file) }?;
 
+        Self::from_buffer(buffer)
+    }
+}
+
+impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
+    pub fn from_buffer(buffer: B) -> io::Result<Self> {
         let mut parser = Parser::new(buffer);
 
         let central_directory = parser.parse_central_directory().unwrap();
@@ -143,9 +162,8 @@ mod test {
         for file in bomb.files() {
             let file = file.unwrap();
 
-            dbg!(file.file_path());
-
-            dbg!(file.decompressed_contents());
+            file.file_path().unwrap();
+            file.decompressed_contents().unwrap();
         }
     }
 }
