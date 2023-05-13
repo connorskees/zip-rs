@@ -151,8 +151,8 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
                 flags: bit_flags,
                 name: file_name,
                 crc,
-                compressed_size: compressed_size,
-                uncompressed_size: uncompressed_size,
+                compressed_size,
+                uncompressed_size,
             };
 
             headers.push(CentralDirectoryFileHeader {
