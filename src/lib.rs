@@ -49,7 +49,10 @@ impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
     pub fn from_buffer(buffer: B) -> Result<Self, ZipParseError> {
         let mut parser = Parser::new(buffer);
 
-        let central_directory = parser.parse_central_directory().unwrap();
+        let central_directory = match parser.parse_central_directory() {
+            Some(cd) => cd,
+            None => return Err(ZipParseError::Generic("malformed zip file")),
+        };
 
         Ok(ZipArchive {
             central_directory,

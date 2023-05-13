@@ -6,4 +6,8 @@ pub enum ZipParseError {
     FileTooLarge(u64),
     #[error("io error {0}")]
     IoError(#[from] std::io::Error),
+    #[error("found {found:?}, expected {expected:?}")]
+    MalformedSignature { found: [u8; 4], expected: [u8; 4] },
+    #[error("generic error: {0}")]
+    Generic(&'static str),
 }
