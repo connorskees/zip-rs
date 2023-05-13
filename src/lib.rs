@@ -14,12 +14,18 @@
 
 use std::{
     borrow::Cow,
+    ffi::OsStr,
     fs::File,
     io::{self, Read},
     ops::Deref,
     path::Path,
-    str::Utf8Error,
 };
+
+#[cfg(target_family = "unix")]
+use std::os::unix::ffi::OsStrExt;
+
+#[cfg(target_family = "windows")]
+use std::os::unix::ffi::OsStrExt;
 
 use common::*;
 use flate2::read::DeflateDecoder;
@@ -27,6 +33,43 @@ use parse::Parser;
 
 mod common;
 mod parse;
+
+/// An entire ZIP archive file
+#[derive(Debug)]
+pub struct ZipArchive<'a, B: Deref<Target = [u8]>> {
+    pub central_directory: CentralDirectory<'a>,
+    parser: Parser<B>,
+}
+
+impl<'a> ZipArchive<'a, memmap::Mmap> {
+    pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
+        let file = File::open(path)?;
+        let buffer = unsafe { memmap::Mmap::map(&file) }?;
+
+        Self::from_buffer(buffer)
+    }
+}
+
+impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
+    pub fn from_buffer(buffer: B) -> io::Result<Self> {
+        let mut parser = Parser::new(buffer);
+
+        let central_directory = parser.parse_central_directory().unwrap();
+
+        Ok(ZipArchive {
+            central_directory,
+            parser,
+        })
+    }
+
+    pub fn files<'b>(&'b mut self) -> impl Iterator<Item = Option<CompressedZipFile<'a>>> + 'b {
+        let files = self.central_directory.files.clone();
+
+        files
+            .into_iter()
+            .map(move |file_header| self.parser.read_file(&file_header))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct CentralDirectoryFileHeader<'a> {
@@ -61,6 +104,7 @@ pub struct Metadata<'a> {
     pub crc: u32,
 }
 
+/// A single compressed zip file
 #[derive(Debug)]
 pub struct CompressedZipFile<'a> {
     pub metadata: Metadata<'a>,
@@ -92,10 +136,8 @@ impl<'a> CompressedZipFile<'a> {
         }
     }
 
-    pub fn file_path(&self) -> Result<&Path, Utf8Error> {
-        let str_name = std::str::from_utf8(self.metadata.name)?;
-
-        Ok(str_name.as_ref())
+    pub fn file_path(&self) -> &Path {
+        &Path::new(OsStr::from_bytes(self.metadata.name))
     }
 
     pub fn file_path_bytes(&self) -> &'a [u8] {
@@ -107,47 +149,10 @@ impl<'a> CompressedZipFile<'a> {
     }
 }
 
-/// An entire ZIP archive
-#[derive(Debug)]
-pub struct ZipArchive<'a, B: Deref<Target = [u8]>> {
-    pub central_directory: CentralDirectory<'a>,
-    parser: Parser<B>,
-}
-
 #[derive(Debug)]
 pub struct CentralDirectory<'a> {
     pub files: Vec<CentralDirectoryFileHeader<'a>>,
     pub end: EndCentralDirectory,
-}
-
-impl<'a> ZipArchive<'a, memmap::Mmap> {
-    pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
-        let file = File::open(path)?;
-        let buffer = unsafe { memmap::Mmap::map(&file) }?;
-
-        Self::from_buffer(buffer)
-    }
-}
-
-impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
-    pub fn from_buffer(buffer: B) -> io::Result<Self> {
-        let mut parser = Parser::new(buffer);
-
-        let central_directory = parser.parse_central_directory().unwrap();
-
-        Ok(ZipArchive {
-            central_directory,
-            parser,
-        })
-    }
-
-    pub fn files<'b>(&'b mut self) -> impl Iterator<Item = Option<CompressedZipFile<'a>>> + 'b {
-        let files = self.central_directory.files.clone();
-
-        files
-            .into_iter()
-            .map(move |file_header| self.parser.read_file(&file_header))
-    }
 }
 
 #[cfg(test)]
@@ -162,7 +167,6 @@ mod test {
         for file in bomb.files() {
             let file = file.unwrap();
 
-            file.file_path().unwrap();
             file.decompressed_contents().unwrap();
         }
     }
