@@ -12,14 +12,7 @@
 
 #![deny(missing_debug_implementations)]
 
-use std::{
-    borrow::Cow,
-    ffi::OsStr,
-    fs::File,
-    io::{self, Read},
-    ops::Deref,
-    path::Path,
-};
+use std::{borrow::Cow, ffi::OsStr, fs::File, io::Read, ops::Deref, path::Path};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::ffi::OsStrExt;
@@ -28,10 +21,12 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::ffi::OsStrExt;
 
 use common::*;
+pub use error::ZipParseError;
 use flate2::read::DeflateDecoder;
 use parse::Parser;
 
 mod common;
+mod error;
 mod parse;
 
 /// An entire ZIP archive file
@@ -42,7 +37,7 @@ pub struct ZipArchive<'a, B: Deref<Target = [u8]>> {
 }
 
 impl<'a> ZipArchive<'a, memmap::Mmap> {
-    pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ZipParseError> {
         let file = File::open(path)?;
         let buffer = unsafe { memmap::Mmap::map(&file) }?;
 
@@ -51,7 +46,7 @@ impl<'a> ZipArchive<'a, memmap::Mmap> {
 }
 
 impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
-    pub fn from_buffer(buffer: B) -> io::Result<Self> {
+    pub fn from_buffer(buffer: B) -> Result<Self, ZipParseError> {
         let mut parser = Parser::new(buffer);
 
         let central_directory = parser.parse_central_directory().unwrap();
@@ -62,7 +57,9 @@ impl<'a, B: Deref<Target = [u8]>> ZipArchive<'a, B> {
         })
     }
 
-    pub fn files<'b>(&'b mut self) -> impl Iterator<Item = Option<CompressedZipFile<'a>>> + 'b {
+    pub fn files<'b>(
+        &'b mut self,
+    ) -> impl Iterator<Item = Result<CompressedZipFile<'a>, ZipParseError>> + 'b {
         let files = self.central_directory.files.clone();
 
         files
@@ -116,12 +113,11 @@ impl<'a> CompressedZipFile<'a> {
         self.contents
     }
 
-    pub fn decompressed_contents(&self) -> io::Result<Cow<[u8]>> {
+    pub fn decompressed_contents(&self) -> Result<Cow<[u8]>, ZipParseError> {
         // disallow decompressing files over 5gb to avoid zip bombs
-        assert!(
-            self.metadata.uncompressed_size < 5_000_000,
-            "decompressing files larger than 5gb is not supported"
-        );
+        if self.metadata.uncompressed_size >= 5_000_000 {
+            return Err(ZipParseError::FileTooLarge(self.metadata.uncompressed_size));
+        }
 
         match self.metadata.compression_method {
             CompressionMethod::None => return Ok(Cow::Borrowed(self.contents)),

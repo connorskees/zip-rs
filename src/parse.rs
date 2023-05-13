@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use crate::{
     common::*, CentralDirectory, CentralDirectoryFileHeader, CompressedZipFile,
-    EndCentralDirectory, Metadata,
+    EndCentralDirectory, Metadata, ZipParseError,
 };
 use memchr::memmem;
 
@@ -213,14 +213,16 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
     pub(super) fn read_file(
         &mut self,
         central_directory_header: &CentralDirectoryFileHeader,
-    ) -> Option<CompressedZipFile<'a>> {
+    ) -> Result<CompressedZipFile<'a>, ZipParseError> {
         self.cursor = central_directory_header.local_header_offset as usize;
 
         assert!(self.read_signature(LOCAL_FILE_SIGNATURE));
 
-        let metadata = self.read_metadata()?;
-        let contents = self.get_byte_range(metadata.compressed_size as usize)?;
+        let metadata = self.read_metadata().unwrap();
+        let contents = self
+            .get_byte_range(metadata.compressed_size as usize)
+            .unwrap();
 
-        Some(CompressedZipFile { metadata, contents })
+        Ok(CompressedZipFile { metadata, contents })
     }
 }
