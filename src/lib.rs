@@ -12,7 +12,14 @@
 
 #![deny(missing_debug_implementations)]
 
-use std::{borrow::Cow, ffi::OsStr, fs::File, io::Read, ops::Deref, path::Path};
+use std::{
+    borrow::Cow,
+    ffi::OsStr,
+    fs::File,
+    io::{Read, Write},
+    ops::Deref,
+    path::Path,
+};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::ffi::OsStrExt;
@@ -116,6 +123,34 @@ impl<'a> CompressedZipFile<'a> {
         self.contents
     }
 
+    /// Efficiently writes decompressed contents to sink without loading full
+    /// decompressed contents into memory
+    pub fn write(&self, w: &mut dyn Write) -> Result<(), ZipParseError> {
+        // disallow decompressing files over 5gb to avoid zip bombs
+        if self.metadata.uncompressed_size >= 5_000_000 {
+            return Err(ZipParseError::FileTooLarge(self.metadata.uncompressed_size));
+        }
+
+        match self.metadata.compression_method.name() {
+            CompressionMethodName::None => {
+                w.write_all(self.contents)?;
+            }
+            CompressionMethodName::Deflate => {
+                let mut decoder = DeflateDecoder::new(self.contents);
+
+                let amt_read = std::io::copy(&mut decoder, w)?;
+
+                if amt_read != self.metadata.uncompressed_size {
+                    return Err(ZipParseError::Generic("failed to write full buffer"));
+                }
+            }
+            method => todo!("unimplemented compression method {:?}", method),
+        }
+
+        Ok(())
+    }
+
+    /// Decompress contents in one go into memory
     pub fn decompressed_contents(&self) -> Result<Cow<[u8]>, ZipParseError> {
         // disallow decompressing files over 5gb to avoid zip bombs
         if self.metadata.uncompressed_size >= 5_000_000 {
