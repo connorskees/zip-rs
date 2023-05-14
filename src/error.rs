@@ -10,4 +10,8 @@ pub enum ZipParseError {
     MalformedSignature { found: [u8; 4], expected: [u8; 4] },
     #[error("generic error: {0}")]
     Generic(&'static str),
+    #[error("expected file to be longer")]
+    UnexpectedEof,
+    #[error("unable to locate central directory signature")]
+    MissingCentralDirectory,
 }

@@ -17,27 +17,47 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         Self { buffer, cursor: 0 }
     }
 
-    fn read_byte(&mut self) -> Option<u8> {
+    fn _read_byte(&mut self) -> Option<u8> {
         self.buffer.get(self.cursor).copied().map(|b| {
             self.cursor += 1;
             b
         })
     }
 
-    fn read_u16(&mut self) -> Option<u16> {
+    fn skip_u32(&mut self) -> Option<u32> {
+        let b1 = self._read_byte()?;
+        let b2 = self._read_byte()?;
+        let b3 = self._read_byte()?;
+        let b4 = self._read_byte()?;
+
+        Some(u32::from_le_bytes([b1, b2, b3, b4]))
+    }
+
+    fn read_byte(&mut self) -> Result<u8, ZipParseError> {
+        self.buffer
+            .get(self.cursor)
+            .copied()
+            .map(|b| {
+                self.cursor += 1;
+                b
+            })
+            .ok_or(ZipParseError::UnexpectedEof)
+    }
+
+    fn read_u16(&mut self) -> Result<u16, ZipParseError> {
         let b1 = self.read_byte()?;
         let b2 = self.read_byte()?;
 
-        Some(u16::from_le_bytes([b1, b2]))
+        Ok(u16::from_le_bytes([b1, b2]))
     }
 
-    fn read_u32(&mut self) -> Option<u32> {
+    fn read_u32(&mut self) -> Result<u32, ZipParseError> {
         let b1 = self.read_byte()?;
         let b2 = self.read_byte()?;
         let b3 = self.read_byte()?;
         let b4 = self.read_byte()?;
 
-        Some(u32::from_le_bytes([b1, b2, b3, b4]))
+        Ok(u32::from_le_bytes([b1, b2, b3, b4]))
     }
 
     fn read_signature(&mut self, signature: [u8; 4]) -> bool {
@@ -51,26 +71,48 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         let b4 = self.buffer[self.cursor + 3];
 
         if [b1, b2, b3, b4] == signature {
-            self.read_u32();
+            self.skip_u32();
             true
         } else {
             false
         }
     }
 
-    fn get_byte_range(&mut self, len: usize) -> Option<&'a [u8]> {
+    fn expect_signature(&mut self, expected: [u8; 4]) -> Result<(), ZipParseError> {
+        if self.buffer.len() <= self.cursor + 3 {
+            return Err(ZipParseError::Generic("expected 4 byte signature"));
+        }
+
+        let b1 = self.buffer[self.cursor];
+        let b2 = self.buffer[self.cursor + 1];
+        let b3 = self.buffer[self.cursor + 2];
+        let b4 = self.buffer[self.cursor + 3];
+
+        let found = [b1, b2, b3, b4];
+
+        if found == expected {
+            self.skip_u32();
+            Ok(())
+        } else {
+            Err(ZipParseError::MalformedSignature { found, expected })
+        }
+    }
+
+    fn get_byte_range(&mut self, len: usize) -> Result<&'a [u8], ZipParseError> {
         let start = self.cursor;
 
         self.cursor += len;
 
-        unsafe { self.lengthen_buffer_lifetime() }.get(start..self.cursor)
+        unsafe { self.lengthen_buffer_lifetime() }
+            .get(start..self.cursor)
+            .ok_or(ZipParseError::UnexpectedEof)
     }
 
     unsafe fn lengthen_buffer_lifetime(&self) -> &'a [u8] {
         &*(&*self.buffer as *const _)
     }
 
-    fn read_metadata(&mut self) -> Option<Metadata<'a>> {
+    fn read_metadata(&mut self) -> Result<Metadata<'a>, ZipParseError> {
         let version_needed = self.read_u16()?;
         let flags = ZipFlags(self.read_u16()?);
         let compression_method = CompressionMethod(self.read_u16()?);
@@ -98,7 +140,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
             uncompressed_size = u64::from(self.read_u32()?);
         }
 
-        Some(Metadata {
+        Ok(Metadata {
             version_needed,
             compression_method,
             date_time_modified: last_mod_date_time,
@@ -113,7 +155,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
     fn read_central_directory_file_headers(
         &mut self,
         offset: usize,
-    ) -> Option<Vec<CentralDirectoryFileHeader<'a>>> {
+    ) -> Result<Vec<CentralDirectoryFileHeader<'a>>, ZipParseError> {
         self.cursor = offset;
 
         let mut headers = Vec::new();
@@ -166,13 +208,16 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
             })
         }
 
-        Some(headers)
+        Ok(headers)
     }
 
-    fn read_end_central_directory(&mut self, offset: usize) -> Option<EndCentralDirectory> {
+    fn read_end_central_directory(
+        &mut self,
+        offset: usize,
+    ) -> Result<EndCentralDirectory, ZipParseError> {
         self.cursor = offset;
 
-        assert!(self.read_signature(END_CENTRAL_DIRECTORY_SIGNATURE));
+        self.expect_signature(END_CENTRAL_DIRECTORY_SIGNATURE)?;
 
         let disk_num = self.read_u16()?;
         let disk_central_dir_num = self.read_u16()?;
@@ -185,7 +230,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         // skip comment
         self.cursor += usize::from(comment_len);
 
-        Some(EndCentralDirectory {
+        Ok(EndCentralDirectory {
             disk_num,
             disk_central_dir_num,
             disk_entires,
@@ -195,19 +240,21 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         })
     }
 
-    pub(super) fn parse_central_directory(&mut self) -> Option<CentralDirectory<'a>> {
+    pub(super) fn parse_central_directory(
+        &mut self,
+    ) -> Result<CentralDirectory<'a>, ZipParseError> {
         for offset in memmem::rfind_iter(&self.buffer, &END_CENTRAL_DIRECTORY_SIGNATURE) {
             let end = self.read_end_central_directory(offset)?;
             let file_headers =
                 self.read_central_directory_file_headers(end.central_dir_offset as usize)?;
 
-            return Some(CentralDirectory {
+            return Ok(CentralDirectory {
                 files: file_headers,
                 end,
             });
         }
 
-        None
+        Err(ZipParseError::MissingCentralDirectory)
     }
 
     pub(super) fn read_file(
@@ -216,12 +263,10 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
     ) -> Result<CompressedZipFile<'a>, ZipParseError> {
         self.cursor = central_directory_header.local_header_offset as usize;
 
-        assert!(self.read_signature(LOCAL_FILE_SIGNATURE));
+        self.expect_signature(LOCAL_FILE_SIGNATURE)?;
 
-        let metadata = self.read_metadata().unwrap();
-        let contents = self
-            .get_byte_range(metadata.compressed_size as usize)
-            .unwrap();
+        let metadata = self.read_metadata()?;
+        let contents = self.get_byte_range(metadata.compressed_size as usize)?;
 
         Ok(CompressedZipFile { metadata, contents })
     }
