@@ -121,12 +121,10 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         let mut compressed_size = u64::from(self.read_u32()?);
         let mut uncompressed_size = u64::from(self.read_u32()?);
         let file_name_len = usize::from(self.read_u16()?);
-        let extra_field_len = self.read_u16()?;
+        let extra_field_len = usize::from(self.read_u16()?);
 
         let file_name = self.get_byte_range(file_name_len)?;
-
-        // skip extra fields
-        self.cursor += usize::from(extra_field_len);
+        let extra_field = self.get_byte_range(extra_field_len)?;
 
         if flags.has_data_descriptor() {
             let optional_signature = self.read_u32()?;
@@ -146,6 +144,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
             date_time_modified: last_mod_date_time,
             flags,
             name: file_name,
+            extra_field,
             crc,
             compressed_size,
             uncompressed_size,
@@ -175,16 +174,12 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
             let comment_len = usize::from(self.read_u16()?);
             let disk_num_start = self.read_u16()?;
             let internal_attributes = InternalAttributes(self.read_u16()?);
-            let _external_attributes = self.read_u32()?;
+            let external_attributes = ExternalAttributes(self.read_u32()?);
             let local_header_offset = self.read_u32()?;
 
             let file_name = self.get_byte_range(file_name_len)?;
-
-            // skip extra fields
-            self.cursor += extra_field_len;
-
-            // skip comment
-            self.cursor += comment_len;
+            let extra_field = self.get_byte_range(extra_field_len)?;
+            let comment = self.get_byte_range(comment_len)?;
 
             let metadata = Metadata {
                 version_needed,
@@ -192,6 +187,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
                 date_time_modified,
                 flags: bit_flags,
                 name: file_name,
+                extra_field,
                 crc,
                 compressed_size,
                 uncompressed_size,
@@ -201,10 +197,11 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
                 os,
                 metadata,
                 internal_attributes,
-                external_attributes: ExternalAttributes::TODO,
+                external_attributes,
                 disk_num_start,
                 zip_specification_version,
                 local_header_offset,
+                comment,
             })
         }
 
@@ -243,6 +240,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
     pub(super) fn parse_central_directory(
         &mut self,
     ) -> Result<CentralDirectory<'a>, ZipParseError> {
+        // todo: perhaps we need to not select the first one
         for offset in memmem::rfind_iter(&self.buffer, &END_CENTRAL_DIRECTORY_SIGNATURE) {
             let end = self.read_end_central_directory(offset)?;
             let file_headers =

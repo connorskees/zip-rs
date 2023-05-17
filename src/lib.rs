@@ -84,6 +84,7 @@ pub struct CentralDirectoryFileHeader<'a> {
     pub external_attributes: ExternalAttributes,
     pub zip_specification_version: u8,
     pub local_header_offset: u32,
+    pub comment: &'a [u8],
 }
 
 #[derive(Debug)]
@@ -103,6 +104,7 @@ pub struct Metadata<'a> {
     pub date_time_modified: DateTimeModified,
     pub flags: ZipFlags,
     pub name: &'a [u8],
+    pub extra_field: &'a [u8],
     pub compressed_size: u64,
     pub uncompressed_size: u64,
     pub crc: u32,

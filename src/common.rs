@@ -3,7 +3,8 @@ pub const CENTRAL_DIRECTORY_FILE_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x01, 0x02];
 pub const DATA_DESCRIPTOR_SIGNATURE: [u8; 4] = [0x08, 0x07, 0x4b, 0x50];
 pub const END_CENTRAL_DIRECTORY_SIGNATURE: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
 
-#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Os(pub u8);
 
 impl Os {
@@ -12,7 +13,7 @@ impl Os {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum OsName {
     Dos = 0,
@@ -66,7 +67,8 @@ impl OsName {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct DateTimeModified(u32);
 
 impl DateTimeModified {
@@ -75,7 +77,8 @@ impl DateTimeModified {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CompressionMethod(pub u16);
 
 impl CompressionMethod {
@@ -84,7 +87,7 @@ impl CompressionMethod {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CompressionMethodName {
     None = 0,
     Shrink = 1,
@@ -130,31 +133,37 @@ impl CompressionMethodName {
 }
 
 /// General purpose bit flags related to encoding
-#[derive(Debug, Copy, Clone)]
+#[repr(transparent)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ZipFlags(pub u16);
 
-#[allow(dead_code)]
 impl ZipFlags {
-    const ENCRYPTED_FILE: u16 = 1 << 0;
-    const COMPRESSION_OPTION1: u16 = 1 << 1;
-    const COMPRESSION_OPTION2: u16 = 1 << 2;
-    const DATA_DESCRIPTOR: u16 = 1 << 3;
-    const ENHANCED_DEFLATION: u16 = 1 << 4;
-    const COMPRESSED_PATCHED_DATA: u16 = 1 << 5;
-    const STRONG_ENCRYPTION: u16 = 1 << 6;
-    const LANGUAGE_ENCODING: u16 = 1 << 11;
-    const RESERVED: u16 = 1 << 12;
-    const MASK_HEADER_VALUES: u16 = 1 << 13;
+    pub const ENCRYPTED_FILE: u16 = 1 << 0;
+    pub const COMPRESSION_OPTION1: u16 = 1 << 1;
+    pub const COMPRESSION_OPTION2: u16 = 1 << 2;
+    pub const DATA_DESCRIPTOR: u16 = 1 << 3;
+    pub const ENHANCED_DEFLATION: u16 = 1 << 4;
+    pub const COMPRESSED_PATCHED_DATA: u16 = 1 << 5;
+    pub const STRONG_ENCRYPTION: u16 = 1 << 6;
+    pub const LANGUAGE_ENCODING: u16 = 1 << 11;
+    pub const RESERVED: u16 = 1 << 12;
+    pub const MASK_HEADER_VALUES: u16 = 1 << 13;
 
     pub fn has_data_descriptor(&self) -> bool {
         (self.0 & Self::DATA_DESCRIPTOR) != 0
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum ExternalAttributes {
-    TODO,
-}
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExternalAttributes(pub u32);
 
-#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InternalAttributes(pub u16);
+
+impl InternalAttributes {
+    pub const IS_ASCII: u16 = 1 << 0;
+    pub const RESERVED: u16 = 1 << 1;
+    pub const CONTROL_FIELD_RECORDS_PRECEDE_LOGICAL_RECORDS: u16 = 1 << 2;
+}
