@@ -36,6 +36,10 @@ mod common;
 mod error;
 mod parse;
 
+const KB: u64 = 1024;
+const MB: u64 = 1024 * KB;
+const GB: u64 = 1024 * MB;
+
 /// An entire ZIP archive file
 #[derive(Debug)]
 pub struct ZipArchive<'a, B: Deref<Target = [u8]>> {
@@ -126,7 +130,7 @@ impl<'a> CompressedZipFile<'a> {
     /// decompressed contents into memory
     pub fn write(&self, w: &mut dyn Write) -> Result<(), ZipParseError> {
         // disallow decompressing files over 5gb to avoid zip bombs
-        if self.metadata.uncompressed_size >= 5_000_000 {
+        if self.metadata.uncompressed_size >= 5 * GB {
             return Err(ZipParseError::FileTooLarge(self.metadata.uncompressed_size));
         }
 
@@ -152,7 +156,7 @@ impl<'a> CompressedZipFile<'a> {
     /// Decompress contents in one go into memory
     pub fn decompressed_contents(&self) -> Result<Cow<[u8]>, ZipParseError> {
         // disallow decompressing files over 5gb to avoid zip bombs
-        if self.metadata.uncompressed_size >= 5_000_000 {
+        if self.metadata.uncompressed_size >= 5 * GB {
             return Err(ZipParseError::FileTooLarge(self.metadata.uncompressed_size));
         }
 
