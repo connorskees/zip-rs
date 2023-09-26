@@ -7,7 +7,7 @@ license = "MIT"
 keywords = ["zip", "archive"]
 repository = "https://github.com/connorskees/zip-rs"
 readme = "./README.md"
-description = "Opinionated library for parsing and reading ZIP archives"
+description = "Opinionated library for parsing ZIP archives"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
