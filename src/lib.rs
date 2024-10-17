@@ -26,7 +26,7 @@ use std::{
 use std::os::unix::ffi::OsStrExt;
 
 #[cfg(target_family = "windows")]
-use std::os::unix::ffi::OsStrExt;
+use std::os::windows::ffi::OsStrExt;
 
 pub use common::*;
 pub use error::ZipParseError;
@@ -215,6 +215,7 @@ impl<'a> CompressedZipFile<'a> {
     /// the use of absolute paths or the parent directory (`..`). The full file path
     /// should not be used when interacting with the host file system if the ZIP
     /// file is untrusted.
+    #[cfg(target_family = "unix")]
     pub fn file_path(&self) -> &Path {
         &Path::new(OsStr::from_bytes(self.metadata.name))
     }
