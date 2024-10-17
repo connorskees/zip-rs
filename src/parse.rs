@@ -17,23 +17,23 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         Self { buffer, cursor: 0 }
     }
 
-    fn _read_byte(&mut self) -> Option<u8> {
+    fn read_u8_optional(&mut self) -> Option<u8> {
         self.buffer.get(self.cursor).copied().map(|b| {
             self.cursor += 1;
             b
         })
     }
 
-    fn skip_u32(&mut self) -> Option<u32> {
-        let b1 = self._read_byte()?;
-        let b2 = self._read_byte()?;
-        let b3 = self._read_byte()?;
-        let b4 = self._read_byte()?;
+    fn read_u32_optional(&mut self) -> Option<u32> {
+        let b1 = self.read_u8_optional()?;
+        let b2 = self.read_u8_optional()?;
+        let b3 = self.read_u8_optional()?;
+        let b4 = self.read_u8_optional()?;
 
         Some(u32::from_le_bytes([b1, b2, b3, b4]))
     }
 
-    fn read_byte(&mut self) -> Result<u8, ZipParseError> {
+    fn read_u8(&mut self) -> Result<u8, ZipParseError> {
         self.buffer
             .get(self.cursor)
             .copied()
@@ -45,17 +45,17 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
     }
 
     fn read_u16(&mut self) -> Result<u16, ZipParseError> {
-        let b1 = self.read_byte()?;
-        let b2 = self.read_byte()?;
+        let b1 = self.read_u8()?;
+        let b2 = self.read_u8()?;
 
         Ok(u16::from_le_bytes([b1, b2]))
     }
 
     fn read_u32(&mut self) -> Result<u32, ZipParseError> {
-        let b1 = self.read_byte()?;
-        let b2 = self.read_byte()?;
-        let b3 = self.read_byte()?;
-        let b4 = self.read_byte()?;
+        let b1 = self.read_u8()?;
+        let b2 = self.read_u8()?;
+        let b3 = self.read_u8()?;
+        let b4 = self.read_u8()?;
 
         Ok(u32::from_le_bytes([b1, b2, b3, b4]))
     }
@@ -71,7 +71,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         let b4 = self.buffer[self.cursor + 3];
 
         if [b1, b2, b3, b4] == signature {
-            self.skip_u32();
+            self.read_u32_optional();
             true
         } else {
             false
@@ -91,7 +91,7 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         let found = [b1, b2, b3, b4];
 
         if found == expected {
-            self.skip_u32();
+            self.read_u32_optional();
             Ok(())
         } else {
             Err(ZipParseError::MalformedSignature { found, expected })
@@ -160,8 +160,8 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         let mut headers = Vec::new();
 
         while self.read_signature(CENTRAL_DIRECTORY_FILE_SIGNATURE) {
-            let os = Os(self.read_byte()?);
-            let zip_specification_version = self.read_byte()?;
+            let os = Os(self.read_u8()?);
+            let zip_specification_version = self.read_u8()?;
             let version_needed = self.read_u16()?;
             let bit_flags = ZipFlags(self.read_u16()?);
             let compression_method = CompressionMethod(self.read_u16()?);
