@@ -218,8 +218,8 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
 
         let disk_num = self.read_u16()?;
         let disk_central_dir_num = self.read_u16()?;
-        let disk_entires = self.read_u16()?;
-        let total_entires = self.read_u16()?;
+        let disk_entries = self.read_u16()?;
+        let total_entries = self.read_u16()?;
         let central_dir_size = self.read_u32()?;
         let central_dir_offset = self.read_u32()?;
         let comment_len = self.read_u16()?;
@@ -230,8 +230,8 @@ impl<'a, B: Deref<Target = [u8]>> Parser<B> {
         Ok(EndCentralDirectory {
             disk_num,
             disk_central_dir_num,
-            disk_entires,
-            total_entires,
+            disk_entries,
+            total_entries,
             central_dir_size,
             central_dir_offset,
         })

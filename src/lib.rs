@@ -100,8 +100,8 @@ pub struct CentralDirectoryFileHeader<'a> {
 pub struct EndCentralDirectory {
     pub disk_num: u16,
     pub disk_central_dir_num: u16,
-    pub disk_entires: u16,
-    pub total_entires: u16,
+    pub disk_entries: u16,
+    pub total_entries: u16,
     pub central_dir_size: u32,
     pub central_dir_offset: u32,
 }
